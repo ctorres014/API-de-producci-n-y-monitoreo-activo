@@ -23,6 +23,8 @@ class OrchestratorState(TypedDict):
         iteration_count: Number of supervisor decisions made (guards against infinite loops).
         agent_contributions: Dict mapping agent names to their output summaries.
         validation_notes: Optional notes from the supervisor about result quality.
+        is_critical: Whether the task requires human approval before analysis.
+        is_approved: Whether a human has approved the task (None = not yet decided).
     """
 
     messages: Annotated[list, add_messages]
@@ -34,3 +36,5 @@ class OrchestratorState(TypedDict):
     iteration_count: int
     agent_contributions: dict  # e.g. {"research": "...", "analyst": "..."}
     validation_notes: Optional[str]
+    is_critical: bool
+    is_approved: Optional[bool]

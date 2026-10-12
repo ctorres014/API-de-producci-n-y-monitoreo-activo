@@ -1,35 +1,57 @@
 # =============================================================================
-# Multi-Agent Orchestrator — Python Dependencies
+# Multi-Agent Orchestrator API — Python Dependencies
 # =============================================================================
 
-# Core LangGraph & LangChain
+# ── Core LangGraph & LangChain ───────────────────────────────────────────────
 langgraph>=0.2.0
 langchain>=0.3.0
 langchain-core>=0.3.0
 
-# LLM Provider integrations (install the one(s) you need)
+# ── LLM Provider integrations ───────────────────────────────────────────────
 langchain-anthropic>=0.3.0
 langchain-openai>=0.2.0
 langchain-ollama>=0.2.0
 
-# Community tools (Wikipedia search, etc.)
+# ── Community tools (Wikipedia search, etc.) ────────────────────────────────
 langchain-community>=0.3.0
 
-# Search
+# ── Search ──────────────────────────────────────────────────────────────────
 langchain-tavily>=0.1.0
 
-# Environment variable loading
+# ── FastAPI + ASGI server ────────────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9       # form data support
+
+# ── Redis (job state + LangGraph checkpointer) ───────────────────────────────
+redis>=5.0.0
+langgraph-checkpoint-redis>=0.1.0
+
+# ── Observability — LangSmith (primary, zero extra installs) ────────────────
+langsmith>=0.1.0
+
+# ── Observability — Arize Phoenix (optional) ────────────────────────────────
+# Uncomment if you prefer Phoenix over LangSmith:
+# arize-phoenix>=4.0.0
+# openinference-instrumentation-langchain>=0.1.29
+# opentelemetry-sdk>=1.24.0
+# opentelemetry-exporter-otlp>=1.24.0
+
+# ── Environment variable loading ────────────────────────────────────────────
 python-dotenv>=1.0.0
 
-# Data validation & schema
+# ── Data validation & schema ────────────────────────────────────────────────
 pydantic>=2.0.0
 
-# Optional: improved sentiment analysis (falls back to keyword-based without it)
+# ── Load testing ────────────────────────────────────────────────────────────
+httpx>=0.27.0
+
+# ── Optional: improved sentiment analysis ───────────────────────────────────
 textblob>=0.18.0
 
-# Optional: Wikipedia API (used by wikipedia_search tool)
+# ── Optional: Wikipedia API ─────────────────────────────────────────────────
 wikipedia>=1.4.0
 
-# Testing
+# ── Testing ─────────────────────────────────────────────────────────────────
 pytest>=7.0.0
 pytest-asyncio>=0.23.0

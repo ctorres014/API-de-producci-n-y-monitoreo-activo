@@ -1,266 +1,297 @@
-# Multi-Agent Orchestrator with LangGraph
+# Orquestador Multi-Agente — API de Producción (Entrega 7)
 
-A production-ready multi-agent pipeline built with [LangGraph](https://github.com/langchain-ai/langgraph) that coordinates a **Research Agent** and an **Analysis Agent** under the control of a central **Supervisor**. The system supports three LLM backends (Anthropic, OpenAI, Ollama) and provides graceful fallbacks for all optional external services.
+FastAPI asíncrona sobre el orquestador LangGraph del Módulo 6, con Redis para
+persistencia de estado, LangSmith/Phoenix para observabilidad y un nodo
+Human-in-the-Loop (HITL) que pausa la ejecución ante tareas críticas.
 
----
-
-## Architecture
-
-The orchestrator follows a **hierarchical supervisor pattern**: a single Supervisor node acts as the central decision-maker, dispatching work to specialized agents and validating results before finishing.
-
-```mermaid
-graph TD
-    START([START]) --> supervisor[🧠 Supervisor]
-    supervisor -->|next=research| research[🔍 Research Agent]
-    supervisor -->|next=analyst| analyst[📊 Analysis Agent]
-    supervisor -->|next=FINISH| END([END])
-    research --> supervisor
-    analyst --> supervisor
-
-    subgraph Tools
-        research --> T1[web_search]
-        research --> T2[wikipedia_search]
-        analyst --> T3[sentiment_analyzer]
-        analyst --> T4[math_calculator]
-        analyst --> T5[data_validator]
-        analyst --> T6[text_summarizer]
-    end
-```
-
-### Nodes
-
-| Node | Role |
-|---|---|
-| **Supervisor** | Reads current state, decides next action (research / analyst / FINISH), validates output quality. Forces FINISH after `MAX_ITERATIONS` to prevent infinite loops. |
-| **Research Agent** | ReAct agent with `web_search` and `wikipedia_search` tools. Gathers factual information about the query. |
-| **Analysis Agent** | ReAct agent with `sentiment_analyzer`, `math_calculator`, `data_validator`, and `text_summarizer` tools. Transforms research findings into insights. |
-
-### Flow
-
-1. `START → Supervisor` — first decision: usually "go research"
-2. `Supervisor → Research` — gather information
-3. `Research → Supervisor` — evaluate: "is this enough?"
-4. `Supervisor → Analyst` — analyze what was found
-5. `Analyst → Supervisor` — evaluate: "is this complete?"
-6. `Supervisor → END` — return final state
+> El CLI original del Módulo 6 (`python main.py`) sigue funcionando sin cambios.
 
 ---
 
-## File Structure
+## Arquitectura
 
 ```
-Entrega6/
-├── state.py              # OrchestratorState TypedDict
-├── config.py             # LLM provider factory (get_llm)
-├── graph.py              # LangGraph StateGraph definition
-├── main.py               # Interactive CLI & run_query() API
-├── agents/
-│   ├── __init__.py
-│   ├── research_agent.py # Research Agent + research_node
-│   ├── analyst_agent.py  # Analysis Agent + analyst_node
-│   └── supervisor.py     # Supervisor node + route_supervisor
-├── tools/
-│   ├── __init__.py
-│   ├── search_tools.py   # web_search, wikipedia_search
-│   └── analysis_tools.py # sentiment_analyzer, math_calculator,
-│                         # data_validator, text_summarizer
-├── tests/
-│   ├── test_state.py
-│   ├── test_tools.py
-│   ├── test_agents.py
-│   └── test_graph.py
-├── demo_notebook.ipynb
-├── .env.example
-├── requirements.txt
-└── README.md
+POST /tasks ──► worker (BackgroundTask en threadpool)
+                    │
+                    ▼
+             LangGraph graph  ──► RedisSaver (checkpoints)
+           ┌──────────────────────────────────────────────┐
+           │  START → supervisor → research → supervisor  │
+           │                    ↘ human_approval          │
+           │                         │ (approved)         │
+           │                    → analyst → supervisor    │
+           │                    ↘ END                     │
+           └──────────────────────────────────────────────┘
+                    │
+                    ▼
+              Redis (job state)   ──► LangSmith (trazas)
 ```
+
+| Componente | Responsabilidad |
+|------------|----------------|
+| `app/main.py` | FastAPI: endpoints asíncronos, sin bloquear el event loop |
+| `app/graph.py` | Grafo extendido con HITL + RedisSaver checkpointer |
+| `app/worker.py` | Ejecución en background, transiciones de estado en Redis |
+| `app/observability.py` | Init LangSmith o Arize Phoenix |
+| `app/hitl.py` | Nodo `human_approval` con `interrupt()` de LangGraph |
 
 ---
 
-## Setup
+## Prerrequisitos
 
-### 1. Clone / Navigate to the project
+- Python 3.12+
+- Redis 7+ (local o Docker)
+
+---
+
+## Inicio rápido (sin Docker)
+
+### 1. Clonar e instalar
 
 ```bash
-cd Entrega6
-```
+git clone https://github.com/ctorres014/Orquestador-multi-agente-especializado.git
+cd Orquestador-multi-agente-especializado
+git checkout entrega7
 
-### 2. Create a virtual environment
-
-```bash
 python -m venv .venv
-source .venv/bin/activate        # Linux/macOS
-# .venv\Scripts\activate         # Windows
-```
-
-### 3. Install dependencies
-
-```bash
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
+### 2. Variables de entorno
 
 ```bash
 cp .env.example .env
-# Edit .env with your actual API keys
 ```
 
----
-
-## Usage
-
-### Interactive CLI
-
-```bash
-python main.py
-```
-
-Example session:
-```
-=== Multi-Agent Orchestrator ===
-LLM Provider: anthropic
-Model: claude-3-5-sonnet-20241022
-
-Query> What is the current state of AI regulation in the EU?
-```
-
-### Single query (non-interactive)
-
-```bash
-python main.py --query "What are the economic impacts of climate change?"
-```
-
-### Verbose / streamed output
-
-```bash
-python main.py --query "Analyze AI regulation" --verbose
-```
-
-### Programmatic API
-
-```python
-from dotenv import load_dotenv
-load_dotenv()
-
-from main import run_query
-
-result = run_query("What is quantum computing?")
-print(result["analysis_result"])
-print(result["agent_contributions"])
-```
-
----
-
-## LLM Provider Examples
-
-### Anthropic (default)
+Editá `.env` con tus claves reales (mínimo indispensable):
 
 ```env
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+
+REDIS_URL=redis://localhost:6379
+
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=ls__...
+LANGCHAIN_PROJECT=entrega7-multi-agent
 ```
 
-### OpenAI
+### 3. Levantar Redis
+
+```bash
+# Con Docker (recomendado):
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+
+# O con Redis instalado localmente:
+redis-server
+```
+
+### 4. Iniciar la API
+
+```bash
+uvicorn app.main:app --reload
+```
+
+- API: `http://localhost:8000`
+- Docs interactivos: `http://localhost:8000/docs`
+
+---
+
+## Inicio rápido (Docker Compose)
+
+```bash
+cp .env.example .env   # editá con tus claves
+docker compose up --build
+```
+
+Levanta Redis y la API juntos.
+
+---
+
+## Uso de la API
+
+### Enviar una tarea
+
+```bash
+curl -s -X POST http://localhost:8000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is machine learning?"}' | jq
+```
+
+Respuesta inmediata (sin bloquear):
+```json
+{
+  "job_id": "3f8a2c1d-...",
+  "status": "pending",
+  "message": "Task enqueued. Poll GET /tasks/{job_id} for status."
+}
+```
+
+### Consultar estado
+
+```bash
+curl -s http://localhost:8000/tasks/3f8a2c1d-... | jq
+```
+
+| Estado | Significado |
+|--------|-------------|
+| `pending` | Encolado, aún no iniciado |
+| `running` | El grafo está ejecutándose |
+| `awaiting_approval` | Pausado en nodo HITL, esperando aprobación |
+| `done` | Completado exitosamente |
+| `rejected` | El humano rechazó la tarea en HITL |
+| `failed` | Error → estado actualizado en Redis (no loop infinito) |
+
+### Aprobar / rechazar una tarea crítica (HITL)
+
+Cuando la consulta contiene keywords como `deploy`, `delete`, `execute`,
+`publish`, `send email`, etc., el grafo se pausa automáticamente y el
+status cambia a `awaiting_approval`.
+
+```bash
+# Aprobar → continúa al agente analista
+curl -s -X POST http://localhost:8000/tasks/3f8a2c1d-.../approve \
+  -H "Content-Type: application/json" \
+  -d '{"approved": true}' | jq
+
+# Rechazar → finaliza el grafo
+curl -s -X POST http://localhost:8000/tasks/3f8a2c1d-.../approve \
+  -H "Content-Type: application/json" \
+  -d '{"approved": false}' | jq
+```
+
+### Health check
+
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+## Prueba de carga — 5 peticiones concurrentes
+
+Con la API corriendo:
+
+```bash
+python load_test.py
+```
+
+El script envía 5 consultas en paralelo, hace polling hasta que terminan,
+calcula la latencia p95 y guarda los resultados en `load_test_results.json`.
+
+**Capturar métricas del dashboard:**
+1. Abrí `https://smith.langchain.com` → proyecto **entrega7-multi-agent**
+2. En la pestaña **Runs** encontrás las 5 trazas
+3. Capturá: vista general, traza individual, costo por ejecución y latencia p95
+4. Guardá las capturas en `/screenshots`
+
+---
+
+## Observabilidad
+
+### LangSmith (recomendado — cero instalación extra)
 
 ```env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=ls__...
+LANGCHAIN_PROJECT=entrega7-multi-agent
 ```
 
-### Ollama (local, no API key needed)
+LangChain auto-instrumenta todas las llamadas al LLM y cada nodo del grafo.
+
+### Arize Phoenix (alternativa)
 
 ```bash
-# Start Ollama server
-ollama serve
-
-# Pull a model
-ollama pull llama3.2
+pip install arize-phoenix openinference-instrumentation-langchain
 ```
 
 ```env
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
+PHOENIX_ENABLED=true
+```
+
+Dashboard en `http://localhost:6006`.
+
+---
+
+## Estructura del proyecto
+
+```
+├── app/
+│   ├── main.py            # FastAPI: POST /tasks · GET /tasks/{id} · POST /tasks/{id}/approve
+│   ├── graph.py           # Grafo con HITL routing + RedisSaver checkpointer
+│   ├── worker.py          # Ejecución en background, estados en Redis
+│   ├── observability.py   # Init LangSmith / Arize Phoenix
+│   └── hitl.py            # Nodo human_approval: interrupt() + routing post-aprobación
+├── agents/
+│   ├── supervisor.py      # Agente supervisor (M6)
+│   ├── research_agent.py  # Agente de investigación (M6)
+│   └── analyst_agent.py   # Agente analista (M6)
+├── tools/
+│   ├── search_tools.py    # web_search, wikipedia_search
+│   └── analysis_tools.py  # sentiment_analyzer, math_calculator, ...
+├── state.py               # OrchestratorState (+ campos is_critical, is_approved)
+├── config.py              # Factory de LLM (anthropic / openai / ollama)
+├── main.py                # CLI del M6 (sin cambios)
+├── load_test.py           # Script de carga: 5 peticiones concurrentes
+├── docker-compose.yml     # API + Redis
+├── Dockerfile
+├── requirements.txt
+├── .env.example
+└── screenshots/           # Capturas del dashboard de observabilidad
 ```
 
 ---
 
-## Topology Rationale
+## Variables de entorno — referencia completa
 
-### Why a Hierarchical Supervisor Pattern?
-
-The **hierarchical supervisor** pattern was chosen over alternatives (parallel fan-out, sequential chain, round-robin) for the following reasons:
-
-1. **Dynamic routing**: The supervisor can decide whether research is needed at all (e.g., if the query is purely mathematical), or whether a second research pass is required before analysis.
-
-2. **Quality validation**: The supervisor reviews agent outputs before proceeding, enabling it to detect incomplete or off-topic responses and request remediation.
-
-3. **Single source of truth for termination**: By centralizing the FINISH decision in one node, we avoid race conditions and ensure the loop always terminates. The `MAX_ITERATIONS` guard is the hard stop.
-
-4. **Extensibility**: Adding a third agent (e.g., a "writer" agent) requires only: registering a new node + adding edges to/from the supervisor. No existing nodes change.
-
-### How Agent Conflicts Are Handled
-
-When the Research Agent and Analysis Agent produce contradictory or incomplete information:
-
-- The **Supervisor** receives a summary of both outputs and must choose the next action. If outputs are inconsistent, it can re-dispatch to the same or a different agent with clarifying instructions via the `messages` list.
-- Both agents' outputs are preserved in `agent_contributions` (additive merging — new contributions never overwrite prior ones).
-- `validation_notes` in the state lets the supervisor communicate concerns to subsequent agents.
-- The `MAX_ITERATIONS` ceiling (`default: 6`) guarantees the system never loops forever, even if agents keep producing unsatisfactory results.
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | `anthropic` | Backend LLM: `anthropic`, `openai`, `ollama` |
+| `ANTHROPIC_API_KEY` | — | Clave de Anthropic |
+| `ANTHROPIC_MODEL` | `claude-3-5-sonnet-20241022` | Modelo de Anthropic |
+| `OPENAI_API_KEY` | — | Clave de OpenAI |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Modelo de OpenAI |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | URL del servidor Ollama |
+| `OLLAMA_MODEL` | `llama3.2` | Modelo de Ollama |
+| `TAVILY_API_KEY` | — | Clave de Tavily Search (opcional) |
+| `REDIS_URL` | `redis://localhost:6379` | URL de conexión a Redis |
+| `JOB_TTL_SECONDS` | `86400` | TTL de jobs en Redis (segundos) |
+| `LANGCHAIN_TRACING_V2` | `false` | Habilitar trazas LangSmith |
+| `LANGCHAIN_API_KEY` | — | Clave de LangSmith |
+| `LANGCHAIN_PROJECT` | `entrega7-multi-agent` | Proyecto en LangSmith |
+| `PHOENIX_ENABLED` | `false` | Habilitar Arize Phoenix |
+| `MAX_ITERATIONS` | `6` | Iteraciones máximas del supervisor |
 
 ---
 
-## Testing
+## Checklist de entrega
 
-### Run all tests
+- [x] Endpoint asíncrono (`POST /tasks`) que encola sin bloquear el event loop
+- [x] Estado del job en Redis: `PENDING → RUNNING → DONE / FAILED`
+- [x] Excepciones capturadas → status `FAILED` (cliente no queda en loop infinito)
+- [x] `RedisSaver` para checkpoints de LangGraph (fallback a `MemorySaver`)
+- [x] LangSmith / Arize Phoenix configurado en `observability.py`
+- [x] Nodo `human_approval` con `interrupt()` para tareas críticas
+- [x] `POST /tasks/{id}/approve` para reanudar el grafo tras aprobación
+- [x] `load_test.py` para las 5 peticiones concurrentes
+- [x] `docker-compose.yml` con API + Redis
+- [x] `screenshots/` con guía para capturar métricas del dashboard
+
+---
+
+## CLI del Módulo 6 (sin cambios)
+
+El orquestador original sigue disponible:
 
 ```bash
-pytest tests/ -v
+python main.py
+python main.py --query "What is quantum computing?"
+python main.py --query "Analyze AI regulation" --verbose
 ```
-
-### Run a specific test file
-
-```bash
-pytest tests/test_tools.py -v
-pytest tests/test_graph.py -v
-```
-
-### Test coverage report
-
-```bash
-pytest tests/ --cov=. --cov-report=term-missing
-```
-
-### Test categories
-
-| File | What it tests |
-|---|---|
-| `test_state.py` | OrchestratorState schema, field types, instantiation |
-| `test_tools.py` | All 6 tools, edge cases, error handling, mocking |
-| `test_agents.py` | Agent creation, node functions, supervisor decisions, routing |
-| `test_graph.py` | Graph build, node presence, edge topology, invocation |
 
 ---
 
-## Environment Variables Reference
-
-| Variable | Default | Description |
-|---|---|---|
-| `LLM_PROVIDER` | `anthropic` | LLM backend: `anthropic`, `openai`, or `ollama` |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key |
-| `ANTHROPIC_MODEL` | `claude-3-5-sonnet-20241022` | Anthropic model name |
-| `OPENAI_API_KEY` | — | OpenAI API key |
-| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model name |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `llama3.2` | Ollama model name |
-| `TAVILY_API_KEY` | — | Tavily Search API key (optional) |
-| `MAX_ITERATIONS` | `6` | Max supervisor iterations before forced FINISH |
-
----
-
-## License
+## Licencia
 
 MIT
