@@ -1,0 +1,35 @@
+# =============================================================================
+# Multi-Agent Orchestrator — Python Dependencies
+# =============================================================================
+
+# Core LangGraph & LangChain
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+
+# LLM Provider integrations (install the one(s) you need)
+langchain-anthropic>=0.3.0
+langchain-openai>=0.2.0
+langchain-ollama>=0.2.0
+
+# Community tools (Wikipedia search, etc.)
+langchain-community>=0.3.0
+
+# Search
+langchain-tavily>=0.1.0
+
+# Environment variable loading
+python-dotenv>=1.0.0
+
+# Data validation & schema
+pydantic>=2.0.0
+
+# Optional: improved sentiment analysis (falls back to keyword-based without it)
+textblob>=0.18.0
+
+# Optional: Wikipedia API (used by wikipedia_search tool)
+wikipedia>=1.4.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.23.0
