@@ -53,7 +53,7 @@ POST /tasks ──► FastAPI (BackgroundTask + run_in_threadpool)
 | Nodo | Rol |
 |------|-----|
 | **Supervisor** | Lee el estado actual, decide la siguiente acción (research / analyst / human_approval / FINISH) y valida la calidad de los resultados. Fuerza FINISH tras `MAX_ITERATIONS`. |
-| **Research Agent** | Agente ReAct con `web_search` y `wikipedia_search`. Recopila información factual sobre la consulta. |
+| **Research Agent** | Agente ReAct con `web_search` y `wikipedia_search`. Recopila información actual sobre la consulta. |
 | **Analysis Agent** | Agente ReAct con `sentiment_analyzer`, `math_calculator`, `data_validator` y `text_summarizer`. Transforma los hallazgos en conclusiones. |
 | **Human Approval** | Llama a `interrupt()` de LangGraph para pausar el grafo. Se activa cuando la consulta contiene keywords de alto riesgo (deploy, delete, execute, etc.). |
 
