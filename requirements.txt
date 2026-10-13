@@ -30,12 +30,11 @@ langgraph-checkpoint-redis>=0.1.0
 # ── Observability — LangSmith (primary, zero extra installs) ────────────────
 langsmith>=0.1.0
 
-# ── Observability — Arize Phoenix (optional) ────────────────────────────────
-# Uncomment if you prefer Phoenix over LangSmith:
-# arize-phoenix>=4.0.0
-# openinference-instrumentation-langchain>=0.1.29
-# opentelemetry-sdk>=1.24.0
-# opentelemetry-exporter-otlp>=1.24.0
+# ── Observability — Arize Phoenix (default) ─────────────────────────────────
+arize-phoenix>=4.0.0
+openinference-instrumentation-langchain>=0.1.29
+opentelemetry-sdk>=1.24.0
+opentelemetry-exporter-otlp>=1.24.0
 
 # ── Environment variable loading ────────────────────────────────────────────
 python-dotenv>=1.0.0

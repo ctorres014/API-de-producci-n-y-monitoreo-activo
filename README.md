@@ -323,9 +323,20 @@ python main.py --query "Analyze AI regulation" --verbose
 
 ## Observabilidad
 
-### LangSmith (recomendado — sin instalación extra)
+### Arize Phoenix (por defecto — local, sin cuenta externa)
 
-Agregá estas variables a `.env`:
+Los paquetes ya están incluidos en `requirements.txt`. Solo asegurate de tener en `.env`:
+
+```env
+PHOENIX_ENABLED=true
+```
+
+Al iniciar la API, Phoenix levanta un collector en proceso y expone el dashboard en
+`http://localhost:6006`. Verás trazas por nodo, latencia y tokens consumidos.
+
+### LangSmith (alternativa cloud)
+
+Comentá `PHOENIX_ENABLED` y agregá:
 
 ```env
 LANGCHAIN_TRACING_V2=true
@@ -333,20 +344,7 @@ LANGCHAIN_API_KEY=ls__...
 LANGCHAIN_PROJECT=entrega7-multi-agent
 ```
 
-LangChain instrumenta automáticamente todas las llamadas al LLM y cada nodo
-del grafo. Las trazas aparecen en `https://smith.langchain.com`.
-
-### Arize Phoenix (alternativa local)
-
-```bash
-pip install arize-phoenix openinference-instrumentation-langchain
-```
-
-```env
-PHOENIX_ENABLED=true
-```
-
-Dashboard disponible en `http://localhost:6006` cuando la API está corriendo.
+Las trazas aparecen en `https://smith.langchain.com`. No requiere instalar paquetes extra.
 
 ---
 
@@ -439,10 +437,10 @@ OLLAMA_MODEL=llama3.2
 | `TAVILY_API_KEY` | — | Clave Tavily Search (sin ella, búsqueda simulada) |
 | `REDIS_URL` | `redis://localhost:6379` | Conexión a Redis |
 | `JOB_TTL_SECONDS` | `86400` | TTL de jobs en Redis (24 h) |
-| `LANGCHAIN_TRACING_V2` | `false` | Activar trazas LangSmith |
+| `PHOENIX_ENABLED` | `true` | Activar Arize Phoenix (por defecto) |
+| `LANGCHAIN_TRACING_V2` | `false` | Activar trazas LangSmith (alternativa) |
 | `LANGCHAIN_API_KEY` | — | Clave de LangSmith |
 | `LANGCHAIN_PROJECT` | `entrega7-multi-agent` | Proyecto en LangSmith |
-| `PHOENIX_ENABLED` | `false` | Activar Arize Phoenix |
 | `MAX_ITERATIONS` | `6` | Iteraciones máximas del supervisor |
 
 ---
