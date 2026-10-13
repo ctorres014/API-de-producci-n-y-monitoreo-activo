@@ -136,7 +136,6 @@ POST /tasks ──► FastAPI (BackgroundTask + run_in_threadpool)
 ```bash
 git clone https://github.com/ctorres014/Orquestador-multi-agente-especializado.git
 cd Orquestador-multi-agente-especializado
-git checkout entrega7
 ```
 
 ### 2. Crear entorno virtual e instalar dependencias
