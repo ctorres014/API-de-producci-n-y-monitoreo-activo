@@ -2,8 +2,8 @@
 Observability setup for the multi-agent API.
 
 Supports two backends:
-  - LangSmith (default): set LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY
-  - Arize Phoenix (optional): set PHOENIX_ENABLED=true
+  - Arize Phoenix (default): set PHOENIX_ENABLED=true
+  - LangSmith (alternative): set LANGCHAIN_TRACING_V2=true + LANGCHAIN_API_KEY
 
 Both are configured via environment variables so no code changes are needed
 to switch between them.
@@ -55,11 +55,9 @@ def _try_phoenix() -> bool:
     try:
         import phoenix as px  # type: ignore
         from openinference.instrumentation.langchain import LangChainInstrumentor  # type: ignore
-        from opentelemetry import trace as otel_trace  # type: ignore
-        from opentelemetry.sdk.trace import TracerProvider  # type: ignore
-        from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # type: ignore
         from phoenix.otel import register  # type: ignore
 
+        px.launch_app()  # start embedded Phoenix server on port 6006
         tracer_provider = register()
         LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
         logger.info("Arize Phoenix tracing enabled → dashboard at http://localhost:6006")

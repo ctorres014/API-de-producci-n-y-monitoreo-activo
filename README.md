@@ -101,10 +101,16 @@ POST /tasks ──► FastAPI (BackgroundTask + run_in_threadpool)
 │   ├── search_tools.py    # web_search, wikipedia_search
 │   └── analysis_tools.py  # sentiment_analyzer, math_calculator, data_validator, text_summarizer
 ├── tests/
+│   ├── conftest.py            # FakeRedis + fixtures compartidos
 │   ├── test_state.py
 │   ├── test_tools.py
 │   ├── test_agents.py
-│   └── test_graph.py
+│   ├── test_graph.py
+│   ├── test_hitl.py
+│   ├── test_worker.py
+│   ├── test_api_graph.py
+│   ├── test_observability.py
+│   └── test_api.py
 ├── state.py               # OrchestratorState TypedDict (+ is_critical, is_approved)
 ├── config.py              # Factory de LLM (anthropic / openai / ollama)
 ├── main.py                # CLI interactivo (Módulo 6, sin cambios)
@@ -124,8 +130,9 @@ POST /tasks ──► FastAPI (BackgroundTask + run_in_threadpool)
 - Python 3.12+
 - Redis 7+ (local o vía Docker)
 - Una clave de API de Anthropic, OpenAI u Ollama corriendo localmente
+- `jq` para formatear las respuestas curl (`brew install jq` / `apt install jq`)
 - *(Opcional)* Clave de Tavily para búsqueda web real
-- *(Opcional)* Clave de LangSmith para observabilidad
+- *(Opcional)* Clave de LangSmith si se prefiere observabilidad cloud en lugar de Phoenix
 
 ---
 
@@ -134,8 +141,8 @@ POST /tasks ──► FastAPI (BackgroundTask + run_in_threadpool)
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/ctorres014/Orquestador-multi-agente-especializado.git
-cd Orquestador-multi-agente-especializado
+git clone https://github.com/ctorres014/API-de-producci-n-y-monitoreo-activo.git
+cd API-de-producci-n-y-monitoreo-activo
 ```
 
 ### 2. Crear entorno virtual e instalar dependencias
@@ -164,10 +171,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Redis
 REDIS_URL=redis://localhost:6379
 
-# Observabilidad — LangSmith (recomendado)
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=ls__...
-LANGCHAIN_PROJECT=entrega7-multi-agent
+# Observabilidad — Arize Phoenix (por defecto)
+PHOENIX_ENABLED=true
 ```
 
 ### 4. Levantar Redis
@@ -351,7 +356,7 @@ Las trazas aparecen en `https://smith.langchain.com`. No requiere instalar paque
 ## Prueba de carga — 5 peticiones concurrentes
 
 ```bash
-python load_test.py
+python3 load_test.py
 ```
 
 El script envía 5 consultas en paralelo, hace polling hasta que todas terminan
@@ -376,13 +381,12 @@ y reporta la latencia p95:
 
 **Capturar métricas del dashboard (evidencia requerida):**
 
-1. Abrí `https://smith.langchain.com` → proyecto **entrega7-multi-agent**
-2. En la pestaña **Runs** vas a ver las 5 trazas generadas
+1. Abrí `http://localhost:6006` → dashboard de Arize Phoenix
+2. En la pestaña **Traces** vas a ver las 5 trazas generadas
 3. Capturá:
-   - Vista general con las 5 trazas (`langsmith_traces_overview.png`)
-   - Una traza expandida con todos los nodos (`langsmith_single_trace.png`)
-   - Costo por ejecución en tokens/USD (`langsmith_cost_per_run.png`)
-   - Latencia p95 del dashboard (`langsmith_p95_latency.png`)
+   - Vista general con las 5 trazas (`phoenix_traces_overview.png`)
+   - Una traza expandida con todos los nodos (`phoenix_single_trace.png`)
+   - Latencia y tokens por ejecución (`phoenix_latency_tokens.png`)
 4. Guardá las capturas en `screenshots/`
 
 ---
@@ -464,7 +468,12 @@ pytest tests/ --cov=. --cov-report=term-missing
 | `test_state.py` | Schema de OrchestratorState, tipos de campos |
 | `test_tools.py` | Las 6 herramientas, casos borde, mocking |
 | `test_agents.py` | Creación de agentes, nodos, decisiones del supervisor |
-| `test_graph.py` | Construcción del grafo, nodos, topología, invocación |
+| `test_graph.py` | Construcción del grafo base, nodos, topología, invocación |
+| `test_hitl.py` | Detección de keywords críticos, nodo human_approval, routing post-aprobación |
+| `test_worker.py` | Ciclo de vida de jobs en Redis, run_graph, resume_graph |
+| `test_api_graph.py` | Grafo extendido con HITL, RedisSaver, route_supervisor_api |
+| `test_observability.py` | Detección de LangSmith y Phoenix, fallbacks |
+| `test_api.py` | Endpoints FastAPI: submit, status, approve, health |
 
 ---
 

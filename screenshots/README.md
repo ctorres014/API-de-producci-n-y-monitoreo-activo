@@ -6,20 +6,21 @@ Place your dashboard captures here before submitting.
 
 | File | What to capture |
 |------|----------------|
-| `langsmith_traces_overview.png` | LangSmith project view showing the 5 concurrent runs |
-| `langsmith_single_trace.png` | One expanded trace showing all graph nodes (supervisor → research → analyst) |
-| `langsmith_cost_per_run.png` | Token cost per execution (input + output tokens, cost in USD) |
-| `langsmith_p95_latency.png` | p95 latency from the dashboard after the load test |
+| `phoenix_traces_overview.png` | Phoenix Traces tab showing the 5 concurrent runs |
+| `phoenix_single_trace.png` | One expanded trace showing all graph nodes (supervisor → research → analyst) |
+| `phoenix_latency_tokens.png` | Latency and token usage per execution |
 
 ## How to take them
 
-1. Run `python load_test.py` (API must be running with `LANGCHAIN_TRACING_V2=true`).
-2. Open https://smith.langchain.com → project **entrega7-multi-agent**.
-3. In the **Runs** tab you will see 5 traces — screenshot the list view.
-4. Click into any single trace to see the node-by-node breakdown — screenshot the waterfall.
-5. Use the **Monitor** tab (or the run list's token column) for cost & latency data.
+1. Make sure the API is running with `PHOENIX_ENABLED=true` in `.env`.
+2. Run `python3 load_test.py` to generate 5 concurrent traces.
+3. Open `http://localhost:6006` → Phoenix dashboard.
+4. In the **Traces** tab you will see the 5 traces — screenshot the list view.
+5. Click into any single trace to see the node-by-node breakdown — screenshot the waterfall.
+6. Use the latency / token columns for cost & latency evidence.
+7. Save captures to this `screenshots/` folder.
 
-## Phoenix alternative
+## LangSmith alternative
 
-If using Arize Phoenix (`PHOENIX_ENABLED=true`), open http://localhost:6006 and
-capture the equivalent views from the Phoenix UI.
+If using LangSmith instead (`LANGCHAIN_TRACING_V2=true`), open `https://smith.langchain.com`
+→ project **entrega7-multi-agent** and capture the equivalent views from the Runs tab.

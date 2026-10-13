@@ -22,6 +22,7 @@ services:
     container_name: orchestrator-api
     ports:
       - "8000:8000"
+      - "6006:6006"
     env_file:
       - .env
     environment:
