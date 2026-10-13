@@ -54,7 +54,7 @@ def human_approval_node(state: dict) -> dict:
             "before the Analysis Agent runs."
         ),
         "query": user_query,
-        "research_summary": (research_data[:600] + "…") if len(research_data) > 600 else research_data,
+        "research_summary": (research_data[:600] + "…") if research_data and len(research_data) > 600 else (research_data or "No research data yet"),
         "instructions": (
             "POST /tasks/{job_id}/approve with body "
             '{"approved": true} to continue or {"approved": false} to abort.'

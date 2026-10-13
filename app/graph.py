@@ -25,6 +25,14 @@ The supervisor decides between research / analyst / FINISH as before.
 After research completes and the supervisor next routes to analyst,
 `route_supervisor_api` intercepts: if the query is critical and not yet
 approved, it redirects to `human_approval` instead.
+
+HITL mechanism: `human_approval_node` calls `interrupt()` from langgraph.types.
+This raises GraphInterrupt on the first invoke(), which the worker catches and
+persists as AWAITING_APPROVAL. On resume, `graph.invoke(Command(resume={...}),
+config=config)` returns the human's decision directly to `interrupt()`, the node
+processes it, and the graph continues normally. Using interrupt_before in compile()
+is intentionally avoided — combining both mechanisms causes a double-interrupt on
+resume that always ends in FAILED.
 """
 
 import logging
@@ -114,7 +122,7 @@ def build_api_graph(checkpointer=None):
     workflow.add_edge("research", "supervisor")
     workflow.add_edge("analyst", "supervisor")
 
-    return workflow.compile(checkpointer=checkpointer, interrupt_before=["human_approval"])
+    return workflow.compile(checkpointer=checkpointer)
 
 
 def get_redis_checkpointer():

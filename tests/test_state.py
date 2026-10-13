@@ -29,9 +29,19 @@ class TestOrchestratorState:
             "iteration_count",
             "agent_contributions",
             "validation_notes",
+            # Entrega 7 additions
+            "is_critical",
+            "is_approved",
         ]
         for field in required_fields:
             assert field in hints, f"Missing field: {field}"
+
+    def test_hitl_fields_exist(self):
+        """Entrega 7: is_critical and is_approved fields are annotated."""
+        from state import OrchestratorState
+        hints = OrchestratorState.__annotations__
+        assert "is_critical" in hints
+        assert "is_approved" in hints
 
     def test_instantiation_with_full_state(self):
         """OrchestratorState can be instantiated with all fields."""
@@ -48,6 +58,8 @@ class TestOrchestratorState:
             "iteration_count": 0,
             "agent_contributions": {},
             "validation_notes": None,
+            "is_critical": False,
+            "is_approved": None,
         }
 
         assert state["user_query"] == "Test query"
@@ -58,6 +70,31 @@ class TestOrchestratorState:
         assert state["iteration_count"] == 0
         assert state["agent_contributions"] == {}
         assert state["validation_notes"] is None
+        assert state["is_critical"] is False
+        assert state["is_approved"] is None
+
+    def test_is_critical_defaults_to_false(self):
+        """is_critical stores boolean values correctly."""
+        from state import OrchestratorState
+        state: OrchestratorState = {
+            "messages": [], "user_query": "q", "next_agent": "research",
+            "research_data": None, "analysis_result": None, "task_completed": False,
+            "iteration_count": 0, "agent_contributions": {}, "validation_notes": None,
+            "is_critical": False, "is_approved": None,
+        }
+        assert state["is_critical"] is False
+
+    def test_is_approved_can_be_true_false_or_none(self):
+        """is_approved accepts True, False, and None (not-yet-decided)."""
+        from state import OrchestratorState
+        for value in (True, False, None):
+            state: OrchestratorState = {
+                "messages": [], "user_query": "q", "next_agent": "research",
+                "research_data": None, "analysis_result": None, "task_completed": False,
+                "iteration_count": 0, "agent_contributions": {}, "validation_notes": None,
+                "is_critical": True, "is_approved": value,
+            }
+            assert state["is_approved"] == value
 
     def test_instantiation_with_data(self):
         """OrchestratorState holds data correctly when populated."""
@@ -77,6 +114,8 @@ class TestOrchestratorState:
             "iteration_count": 1,
             "agent_contributions": {"research": "AI stands for artificial intelligence..."},
             "validation_notes": "Research complete, analysis pending.",
+            "is_critical": False,
+            "is_approved": None,
         }
 
         assert len(state["messages"]) == 2

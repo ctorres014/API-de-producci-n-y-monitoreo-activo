@@ -24,6 +24,8 @@ def make_base_state(**overrides) -> dict:
         "iteration_count": 0,
         "agent_contributions": {},
         "validation_notes": None,
+        "is_critical": False,
+        "is_approved": None,
     }
     base.update(overrides)
     return base

@@ -23,6 +23,8 @@ def make_initial_state(query: str = "Test query") -> dict:
         "iteration_count": 0,
         "agent_contributions": {},
         "validation_notes": None,
+        "is_critical": False,
+        "is_approved": None,
     }
 
 
