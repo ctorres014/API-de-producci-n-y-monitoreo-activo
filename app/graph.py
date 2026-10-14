@@ -140,7 +140,7 @@ def get_redis_checkpointer():
 
         client = redis_lib.from_url(redis_url, decode_responses=False)
         client.ping()  # fast connectivity check
-        saver = RedisSaver(client)
+        saver = RedisSaver(redis_client=client)
         saver.setup()
         logger.info("RedisSaver connected → %s", redis_url)
         return saver

@@ -48,25 +48,46 @@ def _try_langsmith() -> bool:
 
 
 def _try_phoenix() -> bool:
-    """Launch an in-process Arize Phoenix collector when PHOENIX_ENABLED=true."""
+    """
+    Enable Arize Phoenix tracing when PHOENIX_ENABLED=true.
+
+    If PHOENIX_COLLECTOR_ENDPOINT is set, traces are sent to an already running
+    Phoenix server (`phoenix serve`). Otherwise an embedded server is launched
+    in-process. Any failure is logged and the API keeps running without tracing.
+    """
     if os.getenv("PHOENIX_ENABLED", "false").lower() != "true":
         return False
+
+    endpoint = os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "").strip()
 
     try:
         import phoenix as px  # type: ignore
         from openinference.instrumentation.langchain import LangChainInstrumentor  # type: ignore
         from phoenix.otel import register  # type: ignore
 
-        px.launch_app()  # start embedded Phoenix server on port 6006
-        tracer_provider = register()
+        if not endpoint:
+            px.launch_app()  # start embedded Phoenix server on port 6006
+        tracer_provider = register()  # reads PHOENIX_COLLECTOR_ENDPOINT
         LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
-        logger.info("Arize Phoenix tracing enabled → dashboard at http://localhost:6006")
+        logger.info(
+            "Arize Phoenix tracing enabled → dashboard at %s",
+            endpoint or "http://localhost:6006",
+        )
         return True
 
     except ImportError as exc:
         logger.warning(
             "PHOENIX_ENABLED=true but packages are missing: %s. "
             "Install: pip install arize-phoenix openinference-instrumentation-langchain",
+            exc,
+        )
+        return False
+
+    except Exception as exc:
+        logger.warning(
+            "Arize Phoenix could not be started (%s) — continuing without tracing. "
+            "Run `phoenix serve` in another terminal and set "
+            "PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006",
             exc,
         )
         return False

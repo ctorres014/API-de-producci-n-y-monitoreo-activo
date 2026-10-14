@@ -128,7 +128,8 @@ POST /tasks ──► FastAPI (BackgroundTask + run_in_threadpool)
 ## Prerrequisitos
 
 - Python 3.12+
-- Redis 7+ (local o vía Docker)
+- Redis 8+ (local o vía Docker) — el checkpointer necesita los módulos RediSearch/RedisJSON, que Redis 8 trae incluidos
+- Docker (recomendado para levantar Redis)
 - Una clave de API de Anthropic, OpenAI u Ollama corriendo localmente
 - `jq` para formatear las respuestas curl (`brew install jq` / `apt install jq`)
 - *(Opcional)* Clave de Tavily para búsqueda web real
@@ -147,18 +148,44 @@ cd API-de-producci-n-y-monitoreo-activo
 
 ### 2. Crear entorno virtual e instalar dependencias
 
-```bash
-python -m venv .venv
-source .venv/bin/activate        # macOS / Linux
-# .venv\Scripts\activate         # Windows
+Verificá primero que tenés Python 3.12+ instalado:
 
+```bash
+python --version   # → Python 3.12.x (en macOS / Linux puede ser python3)
+```
+
+> **Windows:** si aparece `Python was not found; run without arguments to install from the Microsoft Store...`, Python no está instalado (ese mensaje lo da un alias de Windows, no Python real). Instalalo con `winget install Python.Python.3.12` o desde [python.org](https://www.python.org/downloads/) marcando *Add python.exe to PATH*, y **abrí una terminal nueva** para que tome el PATH.
+
+**macOS / Linux:**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+**Windows (PowerShell):**
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+> Si `Activate.ps1` falla con *"running scripts is disabled on this system"*, habilitá scripts locales una sola vez y volvé a activar:
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+>
+> En **cmd.exe** el comando de activación es `.venv\Scripts\activate.bat`.
+
+Al activarse, el prompt muestra `(.venv)`. La instalación descarga ~200 paquetes (Phoenix, pandas, pyarrow, grpcio...) y puede tardar varios minutos.
+
+> **Windows — rutas largas:** si `python -m venv` o `pip` fallan con `OSError: [Errno 2] No such file or directory` sobre un archivo dentro de `.venv\Lib\site-packages\...`, la ruta supera los 260 caracteres. Cloná el repo en una carpeta corta (ej. `C:\dev`) o habilitá rutas largas en Windows.
 
 ### 3. Configurar variables de entorno
 
 ```bash
-cp .env.example .env
+cp .env.example .env        # macOS / Linux / PowerShell
+# copy .env.example .env    # Windows cmd.exe
 ```
 
 Abrí `.env` y completá como mínimo:
@@ -173,40 +200,68 @@ REDIS_URL=redis://localhost:6379
 
 # Observabilidad — Arize Phoenix (por defecto)
 PHOENIX_ENABLED=true
+PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006
 ```
 
 ### 4. Levantar Redis
 
 ```bash
 # Con Docker (recomendado — no requiere instalación):
-docker run -d --name redis -p 6379:6379 redis:7-alpine
+docker run -d --name redis -p 6379:6379 redis:8-alpine
 
-# O con Redis instalado localmente:
+# O con Redis 8+ instalado localmente:
 redis-server
 ```
+
+> Si Docker responde que el puerto 6379 ya está en uso, ya tenés otro Redis corriendo. Usá otro puerto (`-p 6380:6379`) y ajustá `REDIS_URL=redis://localhost:6380` en `.env`.
 
 Verificar que Redis responde:
 
 ```bash
-redis-cli ping   # → PONG
+docker exec redis redis-cli ping   # si lo levantaste con Docker → PONG
+redis-cli ping                     # si Redis está instalado localmente → PONG
 ```
 
-### 5. Iniciar la API
+### 5. Levantar Phoenix (observabilidad)
+
+En **otra terminal**, con el entorno virtual activado:
+
+```bash
+phoenix serve
+```
+
+El primer arranque tarda ~1 minuto (inicializa su base de datos). Está listo cuando muestra `Uvicorn running on http://0.0.0.0:6006`. Dashboard: `http://localhost:6006`.
+
+> Si no querés observabilidad, poné `PHOENIX_ENABLED=false` en `.env` y salteá este paso.
+
+### 6. Iniciar la API
+
+En la terminal original (con el entorno virtual activado):
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
+Está lista cuando el log muestra `Application startup complete`. Verificá:
+
+```bash
+curl http://localhost:8000/health
+# → {"status":"ok","redis":"connected","graph":"compiled"}
+```
+
+> En PowerShell, `curl` es un alias de otro comando; usá `curl.exe` o `Invoke-RestMethod http://localhost:8000/health`.
+
 La API queda disponible en:
 - **API:** `http://localhost:8000`
 - **Docs interactivos (Swagger):** `http://localhost:8000/docs`
 - **ReDoc:** `http://localhost:8000/redoc`
+- **Phoenix:** `http://localhost:6006`
 
 ---
 
 ## Setup — Opción B: Docker Compose
 
-Levanta Redis y la API juntos en un solo comando:
+Levanta Redis, Phoenix y la API juntos en un solo comando:
 
 ```bash
 cp .env.example .env   # completá con tus claves
@@ -334,10 +389,12 @@ Los paquetes ya están incluidos en `requirements.txt`. Solo asegurate de tener 
 
 ```env
 PHOENIX_ENABLED=true
+PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006
 ```
 
-Al iniciar la API, Phoenix levanta un collector en proceso y expone el dashboard en
-`http://localhost:6006`. Verás trazas por nodo, latencia y tokens consumidos.
+Phoenix corre como proceso aparte (`phoenix serve`, o el servicio `phoenix` en Docker Compose) y
+expone el dashboard en `http://localhost:6006`. Verás trazas por nodo, latencia y tokens consumidos.
+Si Phoenix no está disponible, la API arranca igual y lo informa con un warning en el log.
 
 ### LangSmith (alternativa cloud)
 

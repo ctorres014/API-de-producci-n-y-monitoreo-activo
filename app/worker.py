@@ -150,15 +150,22 @@ def run_graph(
         initial_state = _build_initial_state(query)
         final_state = graph.invoke(initial_state, config=config)
 
+        # LangGraph >= 0.4 does not raise on interrupt(): invoke() returns
+        # the partial state with the pending interrupts under "__interrupt__".
+        interrupts = final_state.get("__interrupt__") if isinstance(final_state, dict) else None
+        if interrupts:
+            _handle_interrupt(redis_client, job_id, interrupts)
+            return
+
         result = _serialize_result(final_state)
         update_job(redis_client, job_id, status=STATUS_DONE, result=result)
         logger.info("Job %s completed", job_id)
 
     except Exception as exc:
-        # Check for LangGraph interrupt (HITL pause)
+        # Older LangGraph versions raise GraphInterrupt instead
         exc_name = type(exc).__name__
         if "GraphInterrupt" in exc_name or "Interrupt" in exc_name:
-            _handle_interrupt(redis_client, graph, job_id, exc)
+            _handle_interrupt(redis_client, job_id, exc.args[0] if exc.args else None)
         else:
             logger.exception("Job %s failed: %s", job_id, exc)
             update_job(redis_client, job_id, status=STATUS_FAILED, error=str(exc))
@@ -166,26 +173,22 @@ def run_graph(
 
 def _handle_interrupt(
     redis_client: redis_lib.Redis,
-    graph: Any,
     job_id: str,
-    exc: Exception,
+    raw: Any,
 ) -> None:
     """
-    Handle a GraphInterrupt exception by parking the job as AWAITING_APPROVAL.
+    Park the job as AWAITING_APPROVAL after a HITL interrupt.
 
-    Extracts the interrupt value (the dict passed to interrupt()) and stores
-    it in Redis so the GET /tasks/{id} response can surface it to the client.
+    `raw` is the list of Interrupt objects reported by LangGraph. The value
+    of the first one (the dict passed to interrupt()) is stored in Redis so
+    the GET /tasks/{id} response can surface it to the client.
     """
-    # The interrupt value is attached to the exception as .args[0] or .value
-    interrupt_value: Any = None
-    if hasattr(exc, "args") and exc.args:
-        raw = exc.args[0]
-        # LangGraph wraps the value in a list of Interrupt objects
-        if isinstance(raw, (list, tuple)) and raw:
-            item = raw[0]
-            interrupt_value = getattr(item, "value", str(item))
-        else:
-            interrupt_value = raw
+    # LangGraph wraps the value in a list of Interrupt objects
+    if isinstance(raw, (list, tuple)) and raw:
+        item = raw[0]
+        interrupt_value: Any = getattr(item, "value", str(item))
+    else:
+        interrupt_value = raw
 
     # Attempt to make it JSON-serialisable
     try:

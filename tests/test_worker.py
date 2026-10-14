@@ -255,6 +255,27 @@ class TestRunGraphInterrupt:
         job = get_job(fake_redis, job_id)
         assert job["interrupt_value"] is not None
 
+    def test_sets_status_awaiting_when_invoke_returns_interrupt(self, fake_redis):
+        """LangGraph >= 0.4 returns pending interrupts under '__interrupt__' instead of raising."""
+        class FakeInterrupt:
+            def __init__(self, v):
+                self.value = v
+
+        payload = {"message": "approval needed", "query": "deploy service"}
+        mock_graph = MagicMock()
+        mock_graph.invoke.return_value = {
+            **make_state(research_data="data"),
+            "__interrupt__": [FakeInterrupt(payload)],
+        }
+
+        job_id = create_job(fake_redis, "deploy service")
+        run_graph(fake_redis, mock_graph, job_id, "deploy service")
+
+        job = get_job(fake_redis, job_id)
+        assert job["status"] == STATUS_AWAITING
+        assert job["interrupt_value"] == payload
+        assert job["result"] is None
+
 
 # ---------------------------------------------------------------------------
 # resume_graph
